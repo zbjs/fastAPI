@@ -1,21 +1,21 @@
 from fastapi import FastAPI, HTTPException, Depends
 from pydantic import BaseModel
+from typing import Optional
+from prisma import Prisma
 
 app = FastAPI()
 
-# Example of a mock user database
-fake_user_db = {
-    "johndoe": {
-        "username": "johndoe",
-        "email": "johndoe@x.com",
-        "full_name": "John Doe",
-        "is_active": True,
-        "is_superuser": True,
-        "is_verified": True,
-    }
-}
+prisma = Prisma()
 
-class User(BaseModel):
+@app.on_event("startup")
+async def startup():
+    await prisma.connect()
+
+@app.on_event("shutdown")
+async def shutdown():
+    await prisma.disconnect()
+
+class UserCreate(BaseModel):
     username: str
     email: str
     full_name: str
@@ -27,19 +27,9 @@ class User(BaseModel):
 def read_root():
     return {"Hello": "World"}
 
-@app.get("/items/{item_id}")
-def read_item(item_id: int, q: str = None):
-    return {"item_id": item_id, "q": q}
-
-@app.get("/users/me")
-def read_user_me():
-    return fake_user_db["johndoe"]
-
-@app.post('/create-user')
-def create_user(user: User):
-    fake_user_db[user.username] = user.dict()
-    return {"user": user}
-
+@app.post("/users/", response_model=UserCreate)
+async def create_user(user: UserCreate):
+    return await prisma.user.create(data=user.dict())
 
 if __name__ == "__main__":
     import uvicorn
